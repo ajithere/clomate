@@ -105,6 +105,9 @@ function getClothingRec(feels) {
   };
 }
 
+// ── Location colours (comparison) ────────────────────────────────────────────
+const LOC_COLORS = ['#4a8fe8', '#e07a3c', '#3daa7a', '#9b6dff'];
+
 // ── SVG chart primitives ──────────────────────────────────────────────────────
 
 const PAD = { top: 16, right: 16, bottom: 36, left: 48 };
@@ -808,8 +811,266 @@ async function saveSession(trip, weatherData) {
   URL.revokeObjectURL(url);
 }
 
+// ── Comparison chart primitives ───────────────────────────────────────────────
+
+function CompareCrosshair({ hover, seriesList, accessor, yMin, yMax, width, height }) {
+  const refData = seriesList[0]?.data;
+  if (!refData || hover == null || !refData[hover]) return null;
+  const chartW = width - PAD.left - PAD.right;
+  const chartH = height - PAD.top - PAD.bottom;
+  const yRange = yMax - yMin || 1;
+  const x = PAD.left + (hover / (refData.length - 1 || 1)) * chartW;
+  const toY = v => PAD.top + chartH - ((v - yMin) / yRange) * chartH;
+  return (
+    <g>
+      <line x1={x} x2={x} y1={PAD.top} y2={PAD.top + chartH}
+        stroke="var(--border-strong)" strokeWidth={1} strokeDasharray="3 3" />
+      {seriesList.map((s, i) => {
+        const v = accessor(s.data[hover]);
+        if (v == null) return null;
+        return <circle key={i} cx={x} cy={toY(v)} r={4} fill="white" stroke={s.color} strokeWidth={2} />;
+      })}
+    </g>
+  );
+}
+
+function CompareTooltip({ hover, seriesList, accessor, unit, width }) {
+  const refData = seriesList[0]?.data;
+  if (!refData || hover == null || !refData[hover]) return null;
+  const chartW = width - PAD.left - PAD.right;
+  const x = PAD.left + (hover / (refData.length - 1 || 1)) * chartW;
+  const left = Math.max(70, Math.min(width - 70, x));
+  return (
+    <div className="chart-tooltip" style={{ left, top: 8 }}>
+      <div className="chart-tooltip-date">{fmtDate(refData[hover].date)}</div>
+      {seriesList.map((s, i) => {
+        const v = accessor(s.data[hover]);
+        if (v == null) return null;
+        return (
+          <div key={i} className="chart-tooltip-row">
+            <div className="tooltip-dot" style={{ background: s.color }} />
+            <span>{s.name}: {fmt1(v)}{unit}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CompareChart({ seriesList, accessor, unit = '°C' }) {
+  const wrapRef = useRef(null);
+  const [width, attachRef] = useWidth(wrapRef);
+  const [hover, setHover] = useState(null);
+  const refData = seriesList[0]?.data || [];
+
+  const onMouseMove = useCallback((e) => {
+    if (!refData.length || !width) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const chartW = width - PAD.left - PAD.right;
+    const step = chartW / (refData.length - 1 || 1);
+    const idx = Math.round((mx - PAD.left) / step);
+    setHover(Math.max(0, Math.min(refData.length - 1, idx)));
+  }, [refData, width]);
+
+  const onMouseLeave = useCallback(() => setHover(null), []);
+
+  if (!refData.length) return null;
+
+  const allVals = seriesList.flatMap(s => s.data.map(d => accessor(d))).filter(v => v != null);
+  if (!allVals.length) return null;
+  const yMin = unit === 'mm' ? 0 : Math.floor(Math.min(...allVals) - 2);
+  const yMax = unit === 'mm'
+    ? Math.ceil(Math.max(...allVals, 1) + 2)
+    : Math.ceil(Math.max(...allVals) + 2);
+
+  return (
+    <div className="chart-svg-wrapper" ref={attachRef}>
+      <svg height={CHART_HEIGHT} onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}>
+        <ChartAxes data={refData} yMin={yMin} yMax={yMax} width={width} height={CHART_HEIGHT} unit={unit} />
+        {seriesList.map((s, i) => (
+          <LineSeries
+            key={i}
+            data={s.data}
+            accessor={accessor}
+            yMin={yMin} yMax={yMax}
+            width={width} height={CHART_HEIGHT}
+            color={s.color}
+            strokeWidth={2.5}
+          />
+        ))}
+        <CompareCrosshair
+          hover={hover} seriesList={seriesList} accessor={accessor}
+          yMin={yMin} yMax={yMax} width={width} height={CHART_HEIGHT}
+        />
+      </svg>
+      <CompareTooltip hover={hover} seriesList={seriesList} accessor={accessor} unit={unit} width={width} />
+    </div>
+  );
+}
+
+// ── Comparison stats ──────────────────────────────────────────────────────────
+
+function CompareStats({ seriesList, tab }) {
+  return (
+    <div className="compare-stats">
+      {seriesList.map((s, i) => {
+        if (tab === 'rainfall') {
+          const rains = s.data.map(d => d.rain).filter(v => v != null);
+          const total = rains.reduce((a, b) => a + b, 0);
+          const wetDays = rains.filter(v => v > 1).length;
+          const dryDays = rains.filter(v => v <= 1).length;
+          const wettest = Math.max(...rains, 0);
+          return (
+            <div key={i} className="compare-stat-col" style={{ borderTopColor: s.color }}>
+              <div className="compare-stat-loc">{s.name}</div>
+              <div className="compare-stat-row"><span>Total</span><strong>{Math.round(total)} mm</strong></div>
+              <div className="compare-stat-row"><span>Wet days</span><strong>{wetDays}</strong></div>
+              <div className="compare-stat-row"><span>Wettest day</span><strong>{fmt1(wettest)} mm</strong></div>
+              <div className="compare-stat-row"><span>Dry days</span><strong>{dryDays}</strong></div>
+            </div>
+          );
+        }
+        const vals = (tab === 'feels' ? s.data.map(d => d.feels) : s.data.map(d => d.avg)).filter(v => v != null);
+        const coldAlerts = s.data.filter(d => d.feels != null && d.feels < 10).length;
+        return (
+          <div key={i} className="compare-stat-col" style={{ borderTopColor: s.color }}>
+            <div className="compare-stat-loc">{s.name}</div>
+            <div className="compare-stat-row"><span>Average</span><strong>{fmt1(avg(vals))}°C</strong></div>
+            <div className="compare-stat-row"><span>Coldest</span><strong>{fmt1(Math.min(...vals))}°C</strong></div>
+            <div className="compare-stat-row"><span>Warmest</span><strong>{fmt1(Math.max(...vals))}°C</strong></div>
+            <div className="compare-stat-row">
+              <span>Cold alerts</span>
+              <strong style={{ color: coldAlerts > 0 ? 'var(--red)' : undefined }}>{coldAlerts} days</strong>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Comparison view ───────────────────────────────────────────────────────────
+
+function ComparisonView({ locations, trip }) {
+  const [tab, setTab] = useState('temperature');
+  const [activeYear, setActiveYear] = useState('all');
+
+  const getLocData = loc =>
+    activeYear === 'all' ? buildAllAvg(loc.years) : (loc.years[activeYear] || []);
+
+  const seriesList = locations.map((loc, i) => ({
+    data: getLocData(loc),
+    color: LOC_COLORS[i % LOC_COLORS.length],
+    name: loc.name,
+  }));
+
+  const tabLabels = [
+    { key: 'temperature', label: 'Temperature' },
+    { key: 'feels', label: 'Feels like' },
+    { key: 'rainfall', label: 'Rainfall' },
+  ];
+
+  const accessorMap = {
+    temperature: d => d.avg,
+    feels: d => d.feels,
+    rainfall: d => d.rain,
+  };
+  const unitMap = { temperature: '°C', feels: '°C', rainfall: 'mm' };
+  const titleMap = {
+    temperature: 'Average temperature — comparison',
+    feels: 'Feels-like temperature — comparison',
+    rainfall: 'Daily rainfall — comparison',
+  };
+
+  const yearMode = activeYear === 'all' ? 'avg across all years' : `${activeYear} data`;
+
+  return (
+    <div>
+      <div className="main-header">
+        <div className="main-loc-info">
+          <div className="main-loc-name">Comparing {locations.length} locations</div>
+          <div style={{ marginTop: 4 }}>
+            <span className="year-mode-pill">{yearMode}</span>
+          </div>
+        </div>
+        <div className="year-switcher">
+          <button className={`year-btn${activeYear === 'all' ? ' active' : ''}`} onClick={() => setActiveYear('all')}>
+            All avg
+          </button>
+          {trip.years.map(y => (
+            <button key={y} className={`year-btn${activeYear === y ? ' active' : ''}`} onClick={() => setActiveYear(y)}>
+              {y}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="compare-loc-legend">
+        {locations.map((loc, i) => (
+          <div key={i} className="compare-loc-legend-item">
+            <div className="compare-loc-dot" style={{ background: LOC_COLORS[i % LOC_COLORS.length] }} />
+            <span className="compare-loc-name">{loc.name}</span>
+            {loc.elevation != null && (
+              <span className="compare-loc-elev">{Math.round(loc.elevation)}m</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="chart-tabs">
+        {tabLabels.map(t => (
+          <button key={t.key} className={`chart-tab${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-header">
+          <div>
+            <div className="chart-title">{titleMap[tab]}</div>
+            <div className="chart-meta">
+              {trip.startMD} → {trip.endMD} · {trip.country}
+              {activeYear !== 'all' ? ` · ${activeYear}` : ` · ${trip.years.join(', ')}`}
+            </div>
+          </div>
+          <div className="chart-legend">
+            {locations.map((loc, i) => (
+              <div key={i} className="legend-item">
+                <div className="legend-line" style={{ background: LOC_COLORS[i % LOC_COLORS.length] }} />
+                {loc.name}
+              </div>
+            ))}
+          </div>
+        </div>
+        <CompareChart seriesList={seriesList} accessor={accessorMap[tab]} unit={unitMap[tab]} />
+      </div>
+
+      <CompareStats seriesList={seriesList} tab={tab} />
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
 export default function Dashboard({ trip, weatherData, onEditTrip }) {
   const [activeIdx, setActiveIdx] = useState(0);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIdxs, setCompareIdxs] = useState([]);
+
+  const toggleCompareIdx = (i) => {
+    setCompareIdxs(prev =>
+      prev.includes(i)
+        ? prev.filter(x => x !== i)
+        : prev.length < 4 ? [...prev, i] : prev
+    );
+  };
+
+  const exitCompare = () => {
+    setCompareMode(false);
+    setCompareIdxs([]);
+  };
 
   if (!weatherData.length) {
     return (
@@ -838,28 +1099,57 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
         </div>
 
         <div className="sidebar-locs-header">
-          Locations {weatherData.length}
+          <span>Locations {weatherData.length}</span>
+          {weatherData.length >= 2 && (
+            <button
+              className={`sidebar-compare-btn${compareMode ? ' active' : ''}`}
+              onClick={() => compareMode ? exitCompare() : setCompareMode(true)}
+            >
+              {compareMode ? 'Exit' : 'Compare'}
+            </button>
+          )}
         </div>
 
         <div className="sidebar-loc-list">
-          {weatherData.map((loc, i) => (
-            <div
-              key={i}
-              className={`sidebar-loc-item${i === activeIdx ? ' active' : ''}`}
-              onClick={() => setActiveIdx(i)}
-            >
-              <PinIcon />
-              <div className="sidebar-loc-info">
-                <div className="sidebar-loc-name">{loc.name}</div>
-                <div className="sidebar-loc-sub">
-                  #{String(i + 1).padStart(2, '0')} · {loc.country}
+          {weatherData.map((loc, i) => {
+            const colorIdx = compareIdxs.indexOf(i);
+            const isCompareSelected = colorIdx !== -1;
+            const cls = `sidebar-loc-item${
+              compareMode
+                ? (isCompareSelected ? ' compare-selected' : '')
+                : (i === activeIdx ? ' active' : '')
+            }`;
+            return (
+              <div
+                key={i}
+                className={cls}
+                onClick={() => compareMode ? toggleCompareIdx(i) : setActiveIdx(i)}
+              >
+                {compareMode && (
+                  <div
+                    className={`compare-checkbox${isCompareSelected ? ' checked' : ''}`}
+                    style={isCompareSelected ? { background: LOC_COLORS[colorIdx % LOC_COLORS.length], borderColor: 'transparent' } : {}}
+                  >
+                    {isCompareSelected && (
+                      <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+                        <path d="M1.5 4.5L3.5 6.5L7.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                )}
+                <PinIcon />
+                <div className="sidebar-loc-info">
+                  <div className="sidebar-loc-name">{loc.name}</div>
+                  <div className="sidebar-loc-sub">
+                    #{String(i + 1).padStart(2, '0')} · {loc.country}
+                  </div>
                 </div>
+                {loc.elevation != null && (
+                  <div className="sidebar-elev">{Math.round(loc.elevation)}m</div>
+                )}
               </div>
-              {loc.elevation != null && (
-                <div className="sidebar-elev">{Math.round(loc.elevation)}m</div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="sidebar-footer">
@@ -890,7 +1180,23 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
 
       {/* Main */}
       <div className="main-content">
-        <ChartSection key={activeIdx} location={location} trip={trip} />
+        {compareMode && compareIdxs.length >= 2
+          ? <ComparisonView
+              key={compareIdxs.join(',')}
+              locations={compareIdxs.map(i => weatherData[i])}
+              trip={trip}
+            />
+          : compareMode
+            ? <div className="compare-empty">
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                  <rect x="2" y="8" width="14" height="20" rx="3" stroke="var(--border-strong)" strokeWidth="1.8"/>
+                  <rect x="20" y="8" width="14" height="20" rx="3" stroke="var(--border-strong)" strokeWidth="1.8"/>
+                  <path d="M9 16h4M9 20h4M23 16h4M23 20h4" stroke="var(--border-strong)" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+                <span>Select 2 – 4 locations from the sidebar to compare</span>
+              </div>
+            : <ChartSection key={activeIdx} location={location} trip={trip} />
+        }
       </div>
     </div>
   );
