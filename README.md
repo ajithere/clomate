@@ -1,6 +1,6 @@
 # Clomate
 
-Historical weather dashboard for travellers. Compare daily temperature, feels-like, and rainfall across multiple locations and years — built for cold-sensitive travellers from warm climates planning trips anywhere in the world.
+Historical weather dashboard for travellers. Compare min and max daily temperature, feels-like, and rainfall across multiple locations and years and also a range of days when you are travelling — built for weather-sensitive travellers coming from different climates and for planning trips anywhere in the world.
 
 ## Stack
 
