@@ -1177,6 +1177,28 @@ export default function Dashboard({ trip, weatherData, onEditTrip, initialHomeCi
   };
 
   const [homeCity, setHomeCity] = useState(initialHomeCity || null);
+  const [shareLoading, setShareLoading] = useState(false);
+
+  const handleShare = async () => {
+    setShareLoading(true);
+    try {
+      const session = { version: 1, savedAt: new Date().toISOString(), trip, weatherData, homeCity: homeCity || null };
+      const res = await fetch('/api/share/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(session),
+      });
+      if (!res.ok) { alert('Share failed — could not generate page.'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clomate-share-${trip.country.toLowerCase().replace(/\s+/g, '-')}-${trip.startMD}-${trip.endMD}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert('Share failed.'); }
+    finally { setShareLoading(false); }
+  };
 
   useEffect(() => {
     // fall back to localStorage so sessions saved before homeCityName was
@@ -1308,14 +1330,14 @@ export default function Dashboard({ trip, weatherData, onEditTrip, initialHomeCi
             </svg>
             Save session
           </button>
-          <button className="sidebar-footer-link" onClick={() => alert('Share — coming soon')}>
+          <button className="sidebar-footer-link" onClick={handleShare} disabled={shareLoading}>
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
               <circle cx="10" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.2"/>
               <circle cx="10" cy="10" r="1.5" stroke="currentColor" strokeWidth="1.2"/>
               <circle cx="3" cy="6.5" r="1.5" stroke="currentColor" strokeWidth="1.2"/>
               <path d="M4.5 7.3l4 1.7M4.5 5.7l4-1.7" stroke="currentColor" strokeWidth="1.2"/>
             </svg>
-            Share with travellers
+            {shareLoading ? 'Generating…' : 'Share with travellers'}
           </button>
         </div>
       </div>
