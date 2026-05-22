@@ -103,7 +103,7 @@ The backend enforces per-IP rate limits to protect the upstream Open-Meteo API:
 
 - **4-step setup** — country, date range (MM-DD), years to compare (2020–2025), up to 20 place names
 - **Parallel data loading** — geocodes all places and fetches weather, shows per-place progress and cache source badges; skips places that fail geocoding
-- **Dashboard sidebar** — location list with elevation badges, active location highlighted
+- **Dashboard sidebar** — location list with elevation badges, active location highlighted; "Start fresh" clears all state
 - **Three chart views** per location:
   - Temperature — max / avg / min line chart
   - Feels like — actual avg vs apparent temperature
@@ -111,7 +111,6 @@ The backend enforces per-IP rate limits to protect the upstream Open-Meteo API:
 - **Year switcher** — view a single year or average across all selected years
 - **Hover crosshair** — interactive tooltip on all charts
 - **Stats strip** — average, coldest, warmest, cold alerts (or rain totals)
-- **Day-by-day cards** — scrollable strip with cold-alert badges:
-  - `< 10°C feels-like` → Cold alert (red)
-  - `< 14°C feels-like` → Chilly (amber)
-  - `≥ 14°C feels-like` → Comfortable (green)
+- **Day-by-day cards** — scrollable strip with comfort badges and clothing suggestions
+- **Location comparison** — select 2–4 locations to overlay on the same chart axes; shared crosshair tooltip and per-location stat cards for all three chart types
+- **Configurable comfort thresholds** — Cold alert and Chilly cutoffs are adjustable via +/− controls in the sidebar; settings persist in `localStorage` and update badges, stats, and comparison cards instantly. Defaults: Cold alert `< 10°C` feels-like, Chilly `< 14°C`, Comfortable `≥ 14°C`
