@@ -59,6 +59,13 @@ const weatherLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many weather requests. Please wait a few minutes and try again.' },
+  skip: async (req) => {
+    const { lat, lon, start, end, years } = req.query;
+    if (!lat || !lon || !start || !end || !years) return false;
+    const yearList = years.split(',').map(y => y.trim());
+    const hits = await Promise.all(yearList.map(y => getCached(weatherCacheKey(lat, lon, start, end, y))));
+    return hits.every(h => h !== null);
+  },
 });
 
 // ── App ───────────────────────────────────────────────────────────────────────

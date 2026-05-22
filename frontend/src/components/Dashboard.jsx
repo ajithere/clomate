@@ -843,8 +843,8 @@ function PinIcon() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-async function saveSession(trip, weatherData) {
-  const session = { trip, weatherData };
+async function saveSession(trip, weatherData, homeCity) {
+  const session = { trip, weatherData, homeCity: homeCity || null };
 
   // save to project folder via backend
   try {
@@ -1159,7 +1159,7 @@ function ThresholdSettings({ thresholds, onChange }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-export default function Dashboard({ trip, weatherData, onEditTrip }) {
+export default function Dashboard({ trip, weatherData, onEditTrip, initialHomeCity }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIdxs, setCompareIdxs] = useState([]);
@@ -1176,10 +1176,12 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
     try { localStorage.setItem('clomate-thresholds', JSON.stringify(t)); } catch {}
   };
 
-  const [homeCity, setHomeCity] = useState(null);
+  const [homeCity, setHomeCity] = useState(initialHomeCity || null);
 
   useEffect(() => {
-    const name = trip.homeCityName?.trim();
+    // fall back to localStorage so sessions saved before homeCityName was
+    // added to the trip object still show the banner
+    const name = trip.homeCityName?.trim() || localStorage.getItem('clomate-home-city') || '';
     if (!name) { setHomeCity(null); return; }
     let cancelled = false;
     const load = async () => {
@@ -1299,7 +1301,7 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
             </svg>
             Edit trip setup
           </button>
-          <button className="sidebar-footer-link" onClick={() => saveSession(trip, weatherData)}>
+          <button className="sidebar-footer-link" onClick={() => saveSession(trip, weatherData, homeCity)}>
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
               <path d="M6.5 8.5V1.5M4 5l2.5 2.5L9 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M2 9.5v1a1 1 0 001 1h7a1 1 0 001-1v-1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>

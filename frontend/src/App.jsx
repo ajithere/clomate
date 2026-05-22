@@ -296,6 +296,7 @@ export default function App() {
   const [phase, setPhase] = useState('setup');
   const [trip, setTrip] = useState(null);
   const [weatherData, setWeatherData] = useState([]);
+  const [savedHomeCity, setSavedHomeCity] = useState(null);
   const [setupKey, setSetupKey] = useState(0);
 
   const handleSetupComplete = (tripData) => {
@@ -324,6 +325,7 @@ export default function App() {
   const handleLoadSession = (session) => {
     setTrip(session.trip);
     setWeatherData(session.weatherData);
+    setSavedHomeCity(session.homeCity || null);
     setPhase('dashboard');
   };
 
@@ -346,6 +348,7 @@ export default function App() {
           trip={trip}
           weatherData={weatherData}
           onEditTrip={handleEditTrip}
+          initialHomeCity={savedHomeCity}
         />
       )}
     </div>
