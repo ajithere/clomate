@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +40,42 @@ function buildAllAvg(yearData) {
     });
   }
   return result;
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function monthPartDesc(dateStr) {
+  const [, m, d] = dateStr.split('-').map(Number);
+  const part = d <= 10 ? 'early' : d <= 20 ? 'mid' : 'late';
+  return `${part} ${MONTH_NAMES[m - 1]}`;
+}
+
+function findHomeMatches(homeAvgData, destColdest, destWarmest, tolerance = 2) {
+  if (!homeAvgData?.length) return [];
+  const lo = destColdest - tolerance;
+  const hi = destWarmest + tolerance;
+  const runs = [];
+  let runDays = [];
+  let gap = 0;
+  for (const d of homeAvgData) {
+    if (d.feels != null && d.feels >= lo && d.feels <= hi) {
+      runDays.push(d);
+      gap = 0;
+    } else if (runDays.length > 0) {
+      gap++;
+      if (gap > 5) {
+        if (runDays.length >= 5) runs.push([...runDays]);
+        runDays = [];
+        gap = 0;
+      }
+    }
+  }
+  if (runDays.length >= 5) runs.push(runDays);
+  return runs.map(days => {
+    const start = monthPartDesc(days[0].date);
+    const end = monthPartDesc(days[days.length - 1].date);
+    return { label: start === end ? start : `${start} – ${end}` };
+  });
 }
 
 function getAlertClass(feels, cold = 10, chilly = 14) {
@@ -642,7 +678,7 @@ function DayCards({ data, thresholds }) {
 
 // ── Main chart section ────────────────────────────────────────────────────────
 
-function ChartSection({ location, trip, thresholds }) {
+function ChartSection({ location, trip, thresholds, homeCity }) {
   const [tab, setTab] = useState('temperature');
   const [activeYear, setActiveYear] = useState('all');
 
@@ -650,6 +686,10 @@ function ChartSection({ location, trip, thresholds }) {
   const currentData = activeYear === 'all'
     ? allAvgData
     : (location.years[activeYear] || []);
+
+  const feelsVals = currentData.map(d => d.feels).filter(v => v != null);
+  const destColdest = feelsVals.length ? Math.min(...feelsVals) : null;
+  const destWarmest = feelsVals.length ? Math.max(...feelsVals) : null;
 
   const tabLabels = [
     { key: 'temperature', label: 'Temperature' },
@@ -695,6 +735,22 @@ function ChartSection({ location, trip, thresholds }) {
           ))}
         </div>
       </div>
+
+      {/* Home city reference banner */}
+      {homeCity?.homeData && destColdest != null && (() => {
+        const matches = findHomeMatches(homeCity.homeData, destColdest, destWarmest);
+        return (
+          <div className={`home-ref-banner${!matches.length ? ' home-ref-banner--nomatch' : ''}`}>
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+              <path d="M7.5 1.5L1.5 7V13H5.5V9.5H9.5V13H13.5V7L7.5 1.5Z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
+            </svg>
+            {matches.length
+              ? <span>Feels like <strong>{homeCity.name}</strong> in <strong>{matches.map(m => m.label).join(' or ')}</strong></span>
+              : <span><strong>{homeCity.name}</strong> doesn't typically reach this temperature range</span>
+            }
+          </div>
+        );
+      })()}
 
       {/* Tabs */}
       <div className="chart-tabs">
@@ -1120,6 +1176,27 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
     try { localStorage.setItem('clomate-thresholds', JSON.stringify(t)); } catch {}
   };
 
+  const [homeCity, setHomeCity] = useState(null);
+
+  useEffect(() => {
+    const name = trip.homeCityName?.trim();
+    if (!name) { setHomeCity(null); return; }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const gr = await fetch(`/api/geocode?place=${encodeURIComponent(name)}`);
+        if (!gr.ok || cancelled) return;
+        const geo = await gr.json();
+        const wr = await fetch(`/api/weather?lat=${geo.lat}&lon=${geo.lon}&start=01-01&end=12-31&years=2023,2024`);
+        if (!wr.ok || cancelled) return;
+        const wj = await wr.json();
+        if (!cancelled) setHomeCity({ name: geo.name, country: geo.country, homeData: buildAllAvg(wj.years) });
+      } catch { /* silently — banner just won't show */ }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [trip.homeCityName]);
+
   const toggleCompareIdx = (i) => {
     setCompareIdxs(prev =>
       prev.includes(i)
@@ -1158,6 +1235,8 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
             {trip.startMD} → {trip.endMD}
           </div>
         </div>
+
+        <ThresholdSettings thresholds={thresholds} onChange={handleThresholdChange} />
 
         <div className="sidebar-locs-header">
           <span>Locations {weatherData.length}</span>
@@ -1213,8 +1292,6 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
           })}
         </div>
 
-        <ThresholdSettings thresholds={thresholds} onChange={handleThresholdChange} />
-
         <div className="sidebar-footer">
           <button className="sidebar-footer-link" onClick={onEditTrip}>
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -1259,7 +1336,7 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
                 </svg>
                 <span>Select 2 – 4 locations from the sidebar to compare</span>
               </div>
-            : <ChartSection key={activeIdx} location={location} trip={trip} thresholds={thresholds} />
+            : <ChartSection key={activeIdx} location={location} trip={trip} thresholds={thresholds} homeCity={homeCity} />
         }
       </div>
     </div>

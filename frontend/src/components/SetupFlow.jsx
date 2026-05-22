@@ -9,9 +9,25 @@ const YEAR_OPTIONS = ['2020', '2021', '2022', '2023', '2024', '2025'];
 
 const MD_REGEX = /^\d{2}-\d{2}$/;
 
-function Step1({ country, onChange }) {
+function Step1({ country, onChange, homeCityName, onHomeCityName }) {
   return (
     <div>
+      <div className="home-city-setup">
+        <div className="home-city-setup-label">Your home city</div>
+        <p className="home-city-setup-desc">
+          Where are you travelling <em>from</em>? We'll match the destination's climate to familiar days at home.
+        </p>
+        <input
+          className="home-city-setup-input"
+          value={homeCityName}
+          onChange={e => onHomeCityName(e.target.value)}
+          placeholder="e.g. Mumbai, London, Toronto…"
+          autoFocus
+        />
+      </div>
+
+      <div className="home-city-setup-divider" />
+
       <h2 className="setup-step-title">Where are you travelling?</h2>
       <p className="setup-step-desc">Enter the country you plan to visit.</p>
       <input
@@ -19,7 +35,6 @@ function Step1({ country, onChange }) {
         value={country}
         onChange={e => onChange(e.target.value)}
         placeholder="e.g. Switzerland"
-        autoFocus
       />
       <div className="chip-row">
         {POPULAR_COUNTRIES.map(c => (
@@ -219,7 +234,26 @@ export default function SetupFlow({ initialTrip, onComplete, onLoadSession, onCl
   const [endMD, setEndMD] = useState(initialTrip?.endMD || '');
   const [years, setYears] = useState(initialTrip?.years || ['2022', '2023', '2024']);
   const [places, setPlaces] = useState(initialTrip?.places || ['']);
+  const [homeCityName, setHomeCityName] = useState(() => {
+    if (initialTrip?.homeCityName) return initialTrip.homeCityName;
+    const saved = localStorage.getItem('clomate-home-city');
+    if (!saved) return '';
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed?.name) {
+        localStorage.setItem('clomate-home-city', parsed.name);
+        return parsed.name;
+      }
+    } catch {}
+    return saved;
+  });
   const [errors, setErrors] = useState({});
+
+  const handleHomeCityName = (val) => {
+    setHomeCityName(val);
+    if (val.trim()) localStorage.setItem('clomate-home-city', val.trim());
+    else localStorage.removeItem('clomate-home-city');
+  };
 
   const STEPS = [
     { num: '01', label: 'Destination' },
@@ -251,6 +285,7 @@ export default function SetupFlow({ initialTrip, onComplete, onLoadSession, onCl
         endMD,
         years,
         places: places.filter(p => p.trim()),
+        homeCityName: homeCityName.trim(),
       });
     }
   };
@@ -268,7 +303,7 @@ export default function SetupFlow({ initialTrip, onComplete, onLoadSession, onCl
     return true;
   };
 
-  const trip = { country, startMD, endMD, years, places };
+  const trip = { country, startMD, endMD, years, places, homeCityName };
   const fileInputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -318,7 +353,12 @@ export default function SetupFlow({ initialTrip, onComplete, onLoadSession, onCl
       <div className="setup-body">
         {step === 0 && (
           <>
-            <Step1 country={country} onChange={setCountry} />
+            <Step1
+              country={country}
+              onChange={setCountry}
+              homeCityName={homeCityName}
+              onHomeCityName={handleHomeCityName}
+            />
             <div className="session-load-divider">
               <span>or</span>
             </div>
