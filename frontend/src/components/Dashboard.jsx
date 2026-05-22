@@ -42,17 +42,17 @@ function buildAllAvg(yearData) {
   return result;
 }
 
-function getAlertClass(feels) {
+function getAlertClass(feels, cold = 10, chilly = 14) {
   if (feels == null) return '';
-  if (feels < 10) return 'alert-cold';
-  if (feels < 14) return 'alert-chilly';
+  if (feels < cold) return 'alert-cold';
+  if (feels < chilly) return 'alert-chilly';
   return 'alert-comfortable';
 }
 
-function getAlertLabel(feels) {
+function getAlertLabel(feels, cold = 10, chilly = 14) {
   if (feels == null) return '';
-  if (feels < 10) return 'Cold alert';
-  if (feels < 14) return 'Chilly';
+  if (feels < cold) return 'Cold alert';
+  if (feels < chilly) return 'Chilly';
   return 'Comfortable';
 }
 
@@ -455,13 +455,14 @@ function RainChart({ data }) {
 
 // ── Stats strip ───────────────────────────────────────────────────────────────
 
-function StatsStrip({ data, tab }) {
+function StatsStrip({ data, tab, thresholds }) {
   if (!data.length) return null;
+  const { cold } = thresholds;
 
   if (tab === 'temperature') {
     const avgs = data.map(d => d.avg).filter(v => v != null);
     const feels = data.map(d => d.feels).filter(v => v != null);
-    const coldAlerts = data.filter(d => d.feels != null && d.feels < 10).length;
+    const coldAlerts = data.filter(d => d.feels != null && d.feels < cold).length;
     return (
       <div className="stats-strip">
         <div className="stat-card">
@@ -489,7 +490,7 @@ function StatsStrip({ data, tab }) {
   if (tab === 'feels') {
     const feelsArr = data.map(d => d.feels).filter(v => v != null);
     const avgs = data.map(d => d.avg).filter(v => v != null);
-    const coldAlerts = data.filter(d => d.feels != null && d.feels < 10).length;
+    const coldAlerts = data.filter(d => d.feels != null && d.feels < cold).length;
     return (
       <div className="stats-strip">
         <div className="stat-card">
@@ -597,17 +598,18 @@ function PackingSummary({ data }) {
   );
 }
 
-function DayCards({ data }) {
+function DayCards({ data, thresholds }) {
   if (!data.length) return null;
   const maxRain = Math.max(...data.map(d => d.rain || 0), 1);
+  const { cold, chilly } = thresholds;
 
   return (
     <div>
       <div className="day-section-title">Day by day</div>
       <div className="day-cards-scroll">
         {data.map((d, i) => {
-          const alertCls = getAlertClass(d.feels);
-          const alertLabel = getAlertLabel(d.feels);
+          const alertCls = getAlertClass(d.feels, cold, chilly);
+          const alertLabel = getAlertLabel(d.feels, cold, chilly);
           const clothing = getClothingRec(d.feels);
           const rainPct = Math.min(100, ((d.rain || 0) / maxRain) * 100);
 
@@ -640,7 +642,7 @@ function DayCards({ data }) {
 
 // ── Main chart section ────────────────────────────────────────────────────────
 
-function ChartSection({ location, trip }) {
+function ChartSection({ location, trip, thresholds }) {
   const [tab, setTab] = useState('temperature');
   const [activeYear, setActiveYear] = useState('all');
 
@@ -764,10 +766,10 @@ function ChartSection({ location, trip }) {
       </div>
 
       {/* Stats */}
-      <StatsStrip data={currentData} tab={tab} />
+      <StatsStrip data={currentData} tab={tab} thresholds={thresholds} />
 
       {/* Day cards */}
-      <DayCards data={currentData} />
+      <DayCards data={currentData} thresholds={thresholds} />
     </div>
   );
 }
@@ -911,7 +913,7 @@ function CompareChart({ seriesList, accessor, unit = '°C' }) {
 
 // ── Comparison stats ──────────────────────────────────────────────────────────
 
-function CompareStats({ seriesList, tab }) {
+function CompareStats({ seriesList, tab, thresholds }) {
   return (
     <div className="compare-stats">
       {seriesList.map((s, i) => {
@@ -932,7 +934,7 @@ function CompareStats({ seriesList, tab }) {
           );
         }
         const vals = (tab === 'feels' ? s.data.map(d => d.feels) : s.data.map(d => d.avg)).filter(v => v != null);
-        const coldAlerts = s.data.filter(d => d.feels != null && d.feels < 10).length;
+        const coldAlerts = s.data.filter(d => d.feels != null && d.feels < thresholds.cold).length;
         return (
           <div key={i} className="compare-stat-col" style={{ borderTopColor: s.color }}>
             <div className="compare-stat-loc">{s.name}</div>
@@ -952,7 +954,7 @@ function CompareStats({ seriesList, tab }) {
 
 // ── Comparison view ───────────────────────────────────────────────────────────
 
-function ComparisonView({ locations, trip }) {
+function ComparisonView({ locations, trip, thresholds }) {
   const [tab, setTab] = useState('temperature');
   const [activeYear, setActiveYear] = useState('all');
 
@@ -1047,7 +1049,54 @@ function ComparisonView({ locations, trip }) {
         <CompareChart seriesList={seriesList} accessor={accessorMap[tab]} unit={unitMap[tab]} />
       </div>
 
-      <CompareStats seriesList={seriesList} tab={tab} />
+      <CompareStats seriesList={seriesList} tab={tab} thresholds={thresholds} />
+    </div>
+  );
+}
+
+// ── Threshold settings ────────────────────────────────────────────────────────
+
+function ThresholdSettings({ thresholds, onChange }) {
+  const { cold, chilly } = thresholds;
+
+  const setCold = (v) => {
+    const val = Math.max(-10, Math.min(chilly - 1, v));
+    onChange({ cold: val, chilly });
+  };
+
+  const setChilly = (v) => {
+    const val = Math.max(cold + 1, Math.min(30, v));
+    onChange({ cold, chilly: val });
+  };
+
+  return (
+    <div className="threshold-settings">
+      <div className="threshold-settings-title">Comfort thresholds</div>
+      <div className="threshold-row">
+        <div className="threshold-label">
+          <span className="threshold-swatch swatch-cold" />
+          Cold alert
+        </div>
+        <div className="threshold-control">
+          <button className="threshold-btn" onClick={() => setCold(cold - 1)}>−</button>
+          <span className="threshold-val">{cold}°C</span>
+          <button className="threshold-btn" onClick={() => setCold(cold + 1)}>+</button>
+        </div>
+      </div>
+      <div className="threshold-row">
+        <div className="threshold-label">
+          <span className="threshold-swatch swatch-chilly" />
+          Chilly
+        </div>
+        <div className="threshold-control">
+          <button className="threshold-btn" onClick={() => setChilly(chilly - 1)}>−</button>
+          <span className="threshold-val">{chilly}°C</span>
+          <button className="threshold-btn" onClick={() => setChilly(chilly + 1)}>+</button>
+        </div>
+      </div>
+      <div className="threshold-hint">
+        ≥ {chilly}°C feels-like → Comfortable
+      </div>
     </div>
   );
 }
@@ -1058,6 +1107,18 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [compareMode, setCompareMode] = useState(false);
   const [compareIdxs, setCompareIdxs] = useState([]);
+  const [thresholds, setThresholds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('clomate-thresholds');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { cold: 10, chilly: 14 };
+  });
+
+  const handleThresholdChange = (t) => {
+    setThresholds(t);
+    try { localStorage.setItem('clomate-thresholds', JSON.stringify(t)); } catch {}
+  };
 
   const toggleCompareIdx = (i) => {
     setCompareIdxs(prev =>
@@ -1152,6 +1213,8 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
           })}
         </div>
 
+        <ThresholdSettings thresholds={thresholds} onChange={handleThresholdChange} />
+
         <div className="sidebar-footer">
           <button className="sidebar-footer-link" onClick={onEditTrip}>
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -1185,6 +1248,7 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
               key={compareIdxs.join(',')}
               locations={compareIdxs.map(i => weatherData[i])}
               trip={trip}
+              thresholds={thresholds}
             />
           : compareMode
             ? <div className="compare-empty">
@@ -1195,7 +1259,7 @@ export default function Dashboard({ trip, weatherData, onEditTrip }) {
                 </svg>
                 <span>Select 2 – 4 locations from the sidebar to compare</span>
               </div>
-            : <ChartSection key={activeIdx} location={location} trip={trip} />
+            : <ChartSection key={activeIdx} location={location} trip={trip} thresholds={thresholds} />
         }
       </div>
     </div>
