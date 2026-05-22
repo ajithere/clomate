@@ -212,7 +212,7 @@ function Step4({ trip, onEdit }) {
   );
 }
 
-export default function SetupFlow({ initialTrip, onComplete, onLoadSession }) {
+export default function SetupFlow({ initialTrip, onComplete, onLoadSession, onClear }) {
   const [step, setStep] = useState(0);
   const [country, setCountry] = useState(initialTrip?.country || '');
   const [startMD, setStartMD] = useState(initialTrip?.startMD || '');
@@ -304,6 +304,14 @@ export default function SetupFlow({ initialTrip, onComplete, onLoadSession }) {
             <span className="step-label">{s.label}</span>
           </div>
         ))}
+        {onClear && initialTrip?.country && (
+          <button className="stepper-clear-btn" onClick={onClear} title="Clear all and start over">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+              <path d="M8.5 2.5L2.5 8.5M2.5 2.5l6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            Start fresh
+          </button>
+        )}
       </div>
 
       {/* Step body */}

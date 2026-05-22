@@ -394,6 +394,22 @@ a {
   color: var(--ink-2);
 }
 
+.stepper-clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-4);
+  border-top: 3px solid transparent;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+.stepper-clear-btn:hover {
+  color: var(--ink-2);
+}
+
 /* Setup flow */
 .setup-body {
   padding: 56px 120px 80px;

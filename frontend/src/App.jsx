@@ -296,6 +296,7 @@ export default function App() {
   const [phase, setPhase] = useState('setup');
   const [trip, setTrip] = useState(null);
   const [weatherData, setWeatherData] = useState([]);
+  const [setupKey, setSetupKey] = useState(0);
 
   const handleSetupComplete = (tripData) => {
     setTrip(tripData);
@@ -313,6 +314,13 @@ export default function App() {
     setWeatherData([]);
   };
 
+  const handleClear = () => {
+    setTrip(null);
+    setWeatherData([]);
+    setPhase('setup');
+    setSetupKey(k => k + 1);
+  };
+
   const handleLoadSession = (session) => {
     setTrip(session.trip);
     setWeatherData(session.weatherData);
@@ -325,7 +333,7 @@ export default function App() {
       {phase === 'setup' && (
         <div className="setup-layout">
           <div className="setup-layout-main">
-            <SetupFlow initialTrip={trip} onComplete={handleSetupComplete} onLoadSession={handleLoadSession} />
+            <SetupFlow key={setupKey} initialTrip={trip} onComplete={handleSetupComplete} onLoadSession={handleLoadSession} onClear={handleClear} />
           </div>
           <SavedSessionsPanel onLoad={handleLoadSession} />
         </div>
