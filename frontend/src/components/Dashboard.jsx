@@ -1160,7 +1160,10 @@ function ThresholdSettings({ thresholds, onChange }) {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard({ trip, weatherData, onEditTrip, initialHomeCity }) {
-  const [activeIdx, setActiveIdx] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(() => {
+    const first = weatherData.findIndex(loc => !loc.failed);
+    return first >= 0 ? first : 0;
+  });
   const [compareMode, setCompareMode] = useState(false);
   const [compareIdxs, setCompareIdxs] = useState([]);
   const [thresholds, setThresholds] = useState(() => {
@@ -1234,7 +1237,9 @@ export default function Dashboard({ trip, weatherData, onEditTrip, initialHomeCi
     setCompareIdxs([]);
   };
 
-  if (!weatherData.length) {
+  const hasAnyData = weatherData.some(loc => !loc.failed);
+
+  if (!weatherData.length || !hasAnyData) {
     return (
       <div style={{ padding: 48, textAlign: 'center', color: 'var(--ink-3)' }}>
         No weather data available. All locations failed to load.
@@ -1278,18 +1283,20 @@ export default function Dashboard({ trip, weatherData, onEditTrip, initialHomeCi
           {weatherData.map((loc, i) => {
             const colorIdx = compareIdxs.indexOf(i);
             const isCompareSelected = colorIdx !== -1;
-            const cls = `sidebar-loc-item${
-              compareMode
-                ? (isCompareSelected ? ' compare-selected' : '')
-                : (i === activeIdx ? ' active' : '')
-            }`;
+            const isFailed = !!loc.failed;
+            const cls = `sidebar-loc-item${isFailed ? ' failed' : compareMode
+              ? (isCompareSelected ? ' compare-selected' : '')
+              : (i === activeIdx ? ' active' : '')}`;
             return (
               <div
                 key={i}
                 className={cls}
-                onClick={() => compareMode ? toggleCompareIdx(i) : setActiveIdx(i)}
+                onClick={() => {
+                  if (isFailed) return;
+                  compareMode ? toggleCompareIdx(i) : setActiveIdx(i);
+                }}
               >
-                {compareMode && (
+                {compareMode && !isFailed && (
                   <div
                     className={`compare-checkbox${isCompareSelected ? ' checked' : ''}`}
                     style={isCompareSelected ? { background: LOC_COLORS[colorIdx % LOC_COLORS.length], borderColor: 'transparent' } : {}}
@@ -1305,11 +1312,17 @@ export default function Dashboard({ trip, weatherData, onEditTrip, initialHomeCi
                 <div className="sidebar-loc-info">
                   <div className="sidebar-loc-name">{loc.name}</div>
                   <div className="sidebar-loc-sub">
-                    #{String(i + 1).padStart(2, '0')} · {loc.country}
+                    {isFailed ? 'unavailable' : `#${String(i + 1).padStart(2, '0')} · ${loc.country}`}
                   </div>
                 </div>
-                {loc.elevation != null && (
+                {!isFailed && loc.elevation != null && (
                   <div className="sidebar-elev">{Math.round(loc.elevation)}m</div>
+                )}
+                {isFailed && (
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0, color: 'var(--ink-4)' }}>
+                    <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.2"/>
+                    <path d="M6.5 4v3M6.5 9v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                  </svg>
                 )}
               </div>
             );
@@ -1359,6 +1372,15 @@ export default function Dashboard({ trip, weatherData, onEditTrip, initialHomeCi
                   <path d="M9 16h4M9 20h4M23 16h4M23 20h4" stroke="var(--border-strong)" strokeWidth="1.8" strokeLinecap="round"/>
                 </svg>
                 <span>Select 2 – 4 locations from the sidebar to compare</span>
+              </div>
+            : location.failed
+            ? <div className="loc-unavailable">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="16" r="14" stroke="var(--border-strong)" strokeWidth="1.8"/>
+                  <path d="M16 10v8M16 22v1" stroke="var(--border-strong)" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                <div className="loc-unavailable-name">{location.name}</div>
+                <div className="loc-unavailable-msg">Weather data could not be fetched for this location. Save this session — the location is preserved and data will appear next time it can be retrieved.</div>
               </div>
             : <ChartSection key={activeIdx} location={location} trip={trip} thresholds={thresholds} homeCity={homeCity} />
         }

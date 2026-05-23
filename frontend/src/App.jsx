@@ -105,6 +105,7 @@ function LoadingScreen({ trip, onReady }) {
         if (r.status === 429) {
           const msg = (await r.json()).error || 'Rate limit reached';
           updateItem(i, { status: 'weather-error', errMsg: msg });
+          results.push({ name: geo.name || placeName, lat: geo.lat, lon: geo.lon, elevation: geo.elevation, country: geo.country, years: {}, failed: true });
           continue;
         }
         if (!r.ok) throw new Error('Weather failed');
@@ -125,6 +126,7 @@ function LoadingScreen({ trip, onReady }) {
         });
       } catch (err) {
         updateItem(i, { status: 'weather-error', errMsg: err.message });
+        results.push({ name: geo.name || placeName, lat: geo.lat, lon: geo.lon, elevation: geo.elevation, country: geo.country, years: {}, failed: true });
       }
     }
 

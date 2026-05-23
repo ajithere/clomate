@@ -90,7 +90,7 @@ app.get('/api/geocode', geocodeLimiter, async (req, res) => {
 
     const { data } = await axios.get(
       'https://geocoding-api.open-meteo.com/v1/search',
-      { params }
+      { params, timeout: 8000 }
     );
 
     if (!data.results || data.results.length === 0) {
@@ -142,6 +142,7 @@ app.get('/api/weather', weatherLimiter, async (req, res) => {
     const { data } = await axios.get(
       'https://archive-api.open-meteo.com/v1/archive',
       {
+        timeout: 10000,
         params: {
           latitude:  lat,
           longitude: lon,
